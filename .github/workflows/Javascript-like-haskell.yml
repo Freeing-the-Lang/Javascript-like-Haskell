@@ -27,7 +27,7 @@ jobs:
           fetch-depth: 0
 
       # ----------------------------------------------------------
-      # GHC 설치
+      # Setup GHC
       # ----------------------------------------------------------
       - name: Setup Haskell (GHC + Cabal)
         uses: haskell/actions/setup@v2
@@ -36,17 +36,17 @@ jobs:
           cabal-version: "3.10.1.0"
 
       # ----------------------------------------------------------
-      # Build Haskell files
+      # Build all modules at once  ← (핵심 수정)
       # ----------------------------------------------------------
       - name: Build Javascript-like-Haskell
         shell: bash
         run: |
           mkdir -p dist
-          echo "[Build] Compiling src/*.hs..."
-          ghc -outputdir dist -o dist/jsh src/Main.hs
+          echo "[Build] Compiling Haskell modules..."
+          ghc -outputdir dist -i src -o dist/jsh src/Main.hs
 
       # ----------------------------------------------------------
-      # Run Example demo.jsh
+      # Run Example
       # ----------------------------------------------------------
       - name: Execute Example Script
         shell: bash
@@ -92,9 +92,8 @@ jobs:
             dist/**
             proof/**
 
-
   # ======================================================================
-  # Release Job — ZIP 하나로 통합 릴리즈
+  # Release Job — ZIP 하나만 업로드 (오류 0%)
   # ======================================================================
   release:
     needs: build-3os
@@ -135,10 +134,10 @@ jobs:
           name: "Javascript-like-Haskell ${{ steps.tag.outputs.version }}"
           body: |
             ## Javascript-like-Haskell Auto Release
-            ✔ Haskell(GHC) 기반 JS-like 인터프리터  
-            ✔ 3OS 빌드 테스트 완료  
+            ✔ Haskell(GHC) 기반 JS-like 스크립트 인터프리터  
+            ✔ 3OS 빌드 통과  
             ✔ ProofLedger 자동 생성  
-            ✔ 단일 ZIP 릴리즈 (404 없음)  
-            ✔ Freeing-the-Lang 언어 실험 생태계 표준  
+            ✔ 단일 ZIP 릴리즈 → 404/충돌 없음  
+            ✔ Freeing-the-Lang 생태계 규격  
           files: |
             release/javascript-like-haskell-${{ steps.tag.outputs.version }}.zip

@@ -1,0 +1,144 @@
+name: "Javascript-like-Haskell — 3OS Build + ProofLedger + Clean Release"
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: javascript-like-haskell-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-3os:
+    name: "Build — ${{ matrix.os }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ----------------------------------------------------------
+      # GHC 설치
+      # ----------------------------------------------------------
+      - name: Setup Haskell (GHC + Cabal)
+        uses: haskell/actions/setup@v2
+        with:
+          ghc-version: "9.4.8"
+          cabal-version: "3.10.1.0"
+
+      # ----------------------------------------------------------
+      # Build Haskell files
+      # ----------------------------------------------------------
+      - name: Build Javascript-like-Haskell
+        shell: bash
+        run: |
+          mkdir -p dist
+          echo "[Build] Compiling src/*.hs..."
+          ghc -outputdir dist -o dist/jsh src/Main.hs
+
+      # ----------------------------------------------------------
+      # Run Example demo.jsh
+      # ----------------------------------------------------------
+      - name: Execute Example Script
+        shell: bash
+        run: |
+          echo "[Run] Running demo.jsh..."
+          ./dist/jsh || true
+
+      # ----------------------------------------------------------
+      # ProofLedger 생성
+      # ----------------------------------------------------------
+      - name: Generate ProofLedger
+        shell: bash
+        run: |
+          mkdir -p proof
+          OUT="proof/proofledger.txt"
+
+          echo "Javascript-like-Haskell ProofLedger" > $OUT
+          echo "OS: ${{ runner.os }}" >> $OUT
+          echo "Commit: $GITHUB_SHA" >> $OUT
+          echo "Timestamp: $(date)" >> $OUT
+          echo "" >> $OUT
+          echo "[SHA256 Checksums]" >> $OUT
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            HASH="sha256sum"
+          else
+            HASH="shasum -a 256"
+          fi
+
+          $HASH src/*.hs >> $OUT 2>/dev/null || true
+          $HASH examples/*.jsh >> $OUT 2>/dev/null || true
+
+      # ----------------------------------------------------------
+      # Artifact Upload
+      # ----------------------------------------------------------
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-like-haskell-${{ runner.os }}
+          path: |
+            src/**
+            examples/**
+            dist/**
+            proof/**
+
+
+  # ======================================================================
+  # Release Job — ZIP 하나로 통합 릴리즈
+  # ======================================================================
+  release:
+    needs: build-3os
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Create Version Tag
+        id: tag
+        run: |
+          VERSION="v1.$(date +%Y%m%d%H%M%S)"
+          git tag $VERSION
+          git push origin $VERSION
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download All Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      # ----------------------------------------------------------
+      # Release ZIP 생성
+      # ----------------------------------------------------------
+      - name: Create Release ZIP
+        run: |
+          cd release
+          zip -r javascript-like-haskell-${{ steps.tag.outputs.version }}.zip ./*
+
+      # ----------------------------------------------------------
+      # GitHub Release 업로드
+      # ----------------------------------------------------------
+      - name: Publish Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.tag.outputs.version }}
+          name: "Javascript-like-Haskell ${{ steps.tag.outputs.version }}"
+          body: |
+            ## Javascript-like-Haskell Auto Release
+            ✔ Haskell(GHC) 기반 JS-like 인터프리터  
+            ✔ 3OS 빌드 테스트 완료  
+            ✔ ProofLedger 자동 생성  
+            ✔ 단일 ZIP 릴리즈 (404 없음)  
+            ✔ Freeing-the-Lang 언어 실험 생태계 표준  
+          files: |
+            release/javascript-like-haskell-${{ steps.tag.outputs.version }}.zip

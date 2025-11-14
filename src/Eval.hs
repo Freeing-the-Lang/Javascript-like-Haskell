@@ -3,27 +3,28 @@ module Eval where
 import AST
 import qualified Data.Map as M
 
-type Env = M.Map String Int
+type Env = M.Map String Expr
 
-evalExpr :: Env -> Expr -> IO Env
-evalExpr env (assign name val) = do
-  v <- evalVal env val
-  let env' = M.insert name v env
-  return env'
+eval :: Env -> Expr -> (Env, Expr)
+eval env (Number n) = (env, Number n)
+eval env (StringLit s) = (env, StringLit s)
 
-evalExpr env e = do
-  _ <- evalVal env e
-  return env
+eval env (Var x) =
+  case M.lookup x env of
+    Just v  -> (env, v)
+    Nothing -> error ("Undefined variable: " ++ x)
 
-evalVal :: Env -> Expr -> IO Int
-evalVal env (number n) = return n
-evalVal env (var name) = return (env M.! name)
-evalVal env (binop "+" l r) = (+) <$> evalVal env l <*> evalVal env r
-evalVal env (binop "-" l r) = (-) <$> evalVal env l <*> evalVal env r
+eval env (Assign name val) =
+  let (env', v) = eval env val
+      env'' = M.insert name v env'
+  in (env'', v)
 
-evalVal env (call "print" [x]) = do
-  v <- evalVal env x
-  print v
-  return v
+eval env (Add a b) =
+  let (_, Number x) = eval env a
+      (_, Number y) = eval env b
+  in (env, Number (x + y))
 
-evalVal _ other = error ("Unknown expression: " ++ show other)
+eval env (Seq xs) =
+  foldl step (env, Number 0) xs
+  where
+    step (e, _) expr = eval e expr

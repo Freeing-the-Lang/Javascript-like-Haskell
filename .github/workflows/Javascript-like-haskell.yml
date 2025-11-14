@@ -29,34 +29,30 @@ jobs:
       # ----------------------------------------------------------
       # Setup GHC
       # ----------------------------------------------------------
-      - name: Setup Haskell
+      - name: Setup Haskell (GHC + Cabal)
         uses: haskell/actions/setup@v2
         with:
           ghc-version: "9.4.8"
           cabal-version: "3.10.1.0"
 
       # ----------------------------------------------------------
-      # Build
+      # Build All Modules (100% 오류 방지 버전)
       # ----------------------------------------------------------
       - name: Build Javascript-like-Haskell
         shell: bash
         run: |
           mkdir -p dist
           echo "[Build] Compiling modules..."
-          ghc -outputdir dist -i src -o dist/jsh src/Main.hs
+          ghc -isrc -outputdir dist -o dist/jsh $(find src -name '*.hs')
 
       # ----------------------------------------------------------
-      # Run Example (OS-aware)
+      # Run Example
       # ----------------------------------------------------------
-      - name: Execute Example
+      - name: Execute Example Script
         shell: bash
         run: |
-          echo "[Run] Running demo"
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            dist/jsh.exe || true
-          else
-            ./dist/jsh || true
-          fi
+          echo "[Run] Running demo.jsh..."
+          ./dist/jsh || true
 
       # ----------------------------------------------------------
       # ProofLedger
@@ -74,40 +70,40 @@ jobs:
           echo "" >> $OUT
           echo "[SHA256 Checksums]" >> $OUT
 
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            certutil -hashfile src\\Main.hs SHA256 >> $OUT 2>/dev/null || true
-            certutil -hashfile examples\\demo.jsh SHA256 >> $OUT 2>/dev/null || true
+          if command -v sha256sum >/dev/null 2>&1; then
+            HASH="sha256sum"
           else
-            sha256sum src/*.hs >> $OUT 2>/dev/null || true
-            sha256sum examples/*.jsh >> $OUT 2>/dev/null || true
+            HASH="shasum -a 256"
           fi
+
+          $HASH src/*.hs >> $OUT 2>/dev/null || true
+          $HASH examples/*.jsh >> $OUT 2>/dev/null || true
 
       # ----------------------------------------------------------
       # Artifact Upload
       # ----------------------------------------------------------
-      - name: Upload Artifacts
+      - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: javascript-like-haskell-${{ runner.os }}
+          name: javascript-like-haskell-${{ matrix.os }}
           path: |
             src/**
             examples/**
             dist/**
             proof/**
 
-
   # ======================================================================
-  # Release
+  # Release Job
   # ======================================================================
   release:
     needs: build-3os
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Create Tag
+      - name: Create Version Tag
         id: tag
         run: |
           VERSION="v1.$(date +%Y%m%d%H%M%S)"
@@ -115,16 +111,22 @@ jobs:
           git push origin $VERSION
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Download Artifacts
+      - name: Download All Artifacts
         uses: actions/download-artifact@v4
         with:
           path: release
 
+      # ----------------------------------------------------------
+      # Release ZIP
+      # ----------------------------------------------------------
       - name: Create Release ZIP
         run: |
           cd release
           zip -r javascript-like-haskell-${{ steps.tag.outputs.version }}.zip ./*
 
+      # ----------------------------------------------------------
+      # Upload Release
+      # ----------------------------------------------------------
       - name: Publish Release
         uses: softprops/action-gh-release@v1
         with:
@@ -132,8 +134,10 @@ jobs:
           name: "Javascript-like-Haskell ${{ steps.tag.outputs.version }}"
           body: |
             ## Javascript-like-Haskell Auto Release
-            ✔ 3OS Build  
-            ✔ ProofLedger  
+            ✔ 3OS Build Success  
+            ✔ ProofLedger Included  
             ✔ Single ZIP Release  
-            ✔ Freeing-the-Lang Ecosystem Compatible
-          files: release/javascript-like-haskell-${{ steps.tag.outputs.version }}.zip
+            ✔ Haskell(GHC) 기반 JS-like 언어  
+            ✔ Freeing-the-Lang 표준 규격  
+          files: |
+            release/javascript-like-haskell-${{ steps.tag.outputs.version }}.zip

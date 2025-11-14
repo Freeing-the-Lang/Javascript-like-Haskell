@@ -1,43 +1,31 @@
 module Lexer where
 
+import Data.Char (isAlpha, isAlphaNum, isDigit)
+
 data Token
-  = TokLet
+  = TokNumber Int
   | TokIdent String
-  | TokNumber Int
-  | TokString String
-  | TokEqual
-  | TokPlus | TokMinus | TokStar | TokSlash
-  | TokLParen | TokRParen
-  | TokSemi
+  | TokPlus
+  | TokMinus
+  | TokStar
+  | TokSlash
   | TokEOF
   deriving (Show, Eq)
 
-lexJS :: String -> [Token]
-lexJS [] = [TokEOF]
-lexJS (' ' : xs) = lexJS xs
-lexJS ('\n': xs) = lexJS xs
-lexJS ('\t': xs) = lexJS xs
+tokenize :: String -> [Token]
+tokenize [] = [TokEOF]
+tokenize (c:cs)
+  | isAlpha c =
+      let (name, rest) = span isAlphaNum (c:cs)
+      in TokIdent name : tokenize rest      
 
-lexJS ('l':'e':'t':xs) = TokLet : lexJS xs
+  | isDigit c =
+      let (digits, rest) = span isDigit (c:cs)
+      in TokNumber (read digits) : tokenize rest
 
-lexJS (c:cs)
-  | isAlpha c = let (name, rest) = span isAlphaNum (c:cs)
-                in TokIdent name : lexJS rest
+  | c == '+' = TokPlus  : tokenize cs
+  | c == '-' = TokMinus : tokenize cs
+  | c == '*' = TokStar  : tokenize cs
+  | c == '/' = TokSlash : tokenize cs
 
-  | isDigit c = let (number, rest) = span isDigit (c:cs)
-                in TokNumber (read number) : lexJS rest
-
-lexJS ('"' : xs) =
-  let (s, rest) = span (/= '"') xs
-  in TokString s : lexJS (tail rest)
-
-lexJS ('=':xs) = TokEqual : lexJS xs
-lexJS ('+':xs) = TokPlus : lexJS xs
-lexJS ('-':xs) = TokMinus : lexJS xs
-lexJS ('*':xs) = TokStar : lexJS xs
-lexJS ('/':xs) = TokSlash : lexJS xs
-lexJS ('(':xs) = TokLParen : lexJS xs
-lexJS (')':xs) = TokRParen : lexJS xs
-lexJS (';':xs) = TokSemi   : lexJS xs
-
-lexJS (_:xs) = lexJS xs
+  | otherwise = tokenize cs

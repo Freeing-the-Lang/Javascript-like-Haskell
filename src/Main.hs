@@ -1,21 +1,24 @@
 module Main where
 
+import System.IO
 import Lexer
 import Parser
+import AST
 import Eval
-import Control.Monad.State
 import qualified Data.Map as M
 
 main :: IO ()
 main = do
-  src <- readFile "examples/demo.jsh"
-  let tokens = lexJS src
-  print "[Tokens]"
-  print tokens
+    src <- readFile "examples/demo.jsh"
 
-  let ast = evalState parseProgram tokens
-  print "[AST]"
-  print ast
+    putStrLn "[Lexer] Tokens:"
+    let tokens = tokenize src
+    print tokens
 
-  _ <- foldl (\m e -> m >>= \env -> evalExpr env e) (return M.empty) ast
-  return ()
+    putStrLn "\n[Parser] AST:"
+    let (ast, _) = parse tokens
+    print ast
+
+    putStrLn "\n[Eval] Running program:"
+    let (env, result) = eval M.empty ast
+    putStrLn ("Result: " ++ show result)
